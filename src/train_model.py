@@ -1,41 +1,46 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import RandomForestClassifier
 import joblib
 
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.ensemble import RandomForestClassifier
+
 # Load data
-df = pd.read_csv('data/churn.csv')
+df = pd.read_csv("data/churn.csv")
 
-# Basic cleaning
-df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
-df['TotalCharges'].fillna(df['TotalCharges'].median(), inplace=True)
+# Select features
+features = [
+    'tenure','MonthlyCharges','TotalCharges',
+    'Contract','PaymentMethod','Dependents',
+    'InternetService','OnlineSecurity','TechSupport'
+]
 
-df['Churn'] = df['Churn'].map({'Yes':1, 'No':0})
+df = df[features + ['Churn']]
+
+# Handle missing
+df.dropna(inplace=True)
 
 # Encode categorical
-df = pd.get_dummies(df, drop_first=True)
+encoders = {}
+cat_cols = df.select_dtypes(include='object').columns
+
+for col in cat_cols:
+    le = LabelEncoder()
+    df[col] = le.fit_transform(df[col])
+    encoders[col] = le
 
 # Split
 X = df.drop('Churn', axis=1)
 y = df['Churn']
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
-)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
-# Scaling
-num_cols = X_train.select_dtypes(exclude='object').columns
+# Model
+model = RandomForestClassifier(n_estimators=200)
+model.fit(X_train, y_train)
 
-scaler = StandardScaler()
-X_train[num_cols] = scaler.fit_transform(X_train[num_cols])
-X_test[num_cols] = scaler.transform(X_test[num_cols])
+# Save model + encoders
+joblib.dump(model, "models/churn_model.pkl")
+joblib.dump(encoders, "models/encoders.pkl")
 
-# Train model
-rf = RandomForestClassifier()
-rf.fit(X_train, y_train)
-
-# Save model
-joblib.dump(rf, 'models/churn_model.pkl')
-
-print("Model trained and saved successfully!")
+print("Model trained and saved")
